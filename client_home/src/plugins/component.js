@@ -12,6 +12,22 @@ import host_config from './port_config'
 
 var host = host_config;
 
+// ============================================================
+// 【nginx 反向代理改造说明 - 不要删除该注释】
+// host 变量是整个前端所有 HTTP 请求的"基地址"，由 port_config.js 提供。
+// 下面的 $get / $post / $put / $upload / $download / $fullUrl 等方法都会
+// 用 host 来拼接真实 URL，形如：
+//     url = url.replace('~/', host);   // 把 "~/api/xxx" 变成 "http://host/api/xxx"
+//     url = url.replace('/',  host);   // 把 "/api/xxx"   变成 "http://host/api/xxx"
+//
+// 一旦把 port_config.js 里的 host_config 改为 "" 或 "/"，这里就完全不用改：
+//   - url 会被处理成 "/api/xxx"（相对路径，同源）
+//   - 开发环境由 vue.config.js 的 devServer.proxy 转发到后端
+//   - 生产环境由 nginx 的 location /api/ 转发到后端
+//
+// 千万不要在这里再把 host 改回绝对地址，否则会绕开 nginx 出现跨域。
+// ============================================================
+
 export default {
 	/**
 	 * 安装
