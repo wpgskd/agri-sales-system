@@ -1,0 +1,894 @@
+说明：
+192.168.33.61服务器
+|-agri-mysql8 (端口9906)
+|-agri-redis (6379)
+|-agri-server(23500)
+|--agri-nginx(80/443)
+		|---/api/*  反代到agri-server：23500
+		|--/admin/*  托管在 client_admin静态资源
+		|--/*  		托管在 client_home静态资源
+
+网络拓扑
+外部访问 →80/443→  agri-gatway(nginx) 
+						|
+	--------------------------------------------------
+	|/api/*				|/admin				|  /
+agri-server:23500		agri-admin:80		agri-home:80
+	|→→ agri-mysql8:3306(外部。已在agri-net中)
+	|→ → agri-redis:6379(新增。持久化卷)
+
+构建都成功后
+浏览器访问查看网络发现前端发送的IP都是写死的127.0.0.1：5000
+component.js:307 
+ GET http://127.0.0.1:5000/api/auth/get_list?user_group=%E6%B8%B8%E5%AE%A2&get=1&position=top net::ERR_CONNECTION_REFUSED
+createError.js:16
+ Uncaught (in promise) Error: Network Error
+component.js:296 
+ GET http://127.0.0.1:5000/api/auth/get_list?user_group=%E6%B8%B8%E5%AE%A2 net::ERR_CONNECTION_REFUSED
+所有页面都这样，导致不能实现前后端正常数据交互
+执行构建client_home镜像老是报冲突导致构建失败：
+失败信息如下：
+[root@qzcsbj agri-docker]# docker compose build agri-home
+WARN[0000] /agri-sales-sys/agri-docker/docker-compose.yml: `version` is obsolete 
+[+] Building 579.2s (11/16)                                                                                                                                                docker:default
+ => [agri-home internal] load build definition from Dockerfile                                                                                                                       0.0s
+ => => transferring dockerfile: 3.14kB                                                                                                                                               0.0s
+ => [agri-home internal] load .dockerignore                                                                                                                                          0.0s
+ => => transferring context: 35B                                                                                                                                                     0.0s
+ => [agri-home internal] load metadata for docker.io/library/nginx:1.25.4-alpine                                                                                                     2.3s
+ => [agri-home internal] load metadata for docker.io/library/node:16-bullseye                                                                                                        3.3s
+ => [agri-home internal] load build context                                                                                                                                          0.1s
+ => => transferring context: 7.32kB                                                                                                                                                  0.1s
+ => [agri-home builder 1/7] FROM docker.io/library/node:16-bullseye@sha256:cd59a61258b82b86c1ff0ead50c8a689f6c3483c5ed21036e11ee741add419eb                                          0.0s
+ => [agri-home stage-1 1/4] FROM docker.io/library/nginx:1.25.4-alpine@sha256:31bad00311cb5eeb8a6648beadcf67277a175da89989f14727420a80e2e76742                                       0.0s
+ => CACHED [agri-home builder 2/7] WORKDIR /build                                                                                                                                    0.0s
+ => CACHED [agri-home builder 3/7] COPY package*.json ./                                                                                                                             0.0s
+ => CACHED [agri-home builder 4/7] RUN apt-get update && apt-get install -y python2 python2-dev && apt-get clean && rm -rf /var/lib/apt/lists/*                                      0.0s
+ => ERROR [agri-home builder 5/7] RUN npm cache clean --force && npm config set registry https://registry.npmmirror.com && npm install --legacy-peer-deps --prefer-offline --no-a  575.4s
+------                                                                                                                                                                                    
+ > [agri-home builder 5/7] RUN npm cache clean --force && npm config set registry https://registry.npmmirror.com && npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund --no-optional --fetch-retries=3 --fetch-retry-mintimeout=10000 --fetch-retry-maxtimeout=60000:                                                                                             
+2.969 npm WARN using --force Recommended protections disabled.                                                                                                                            
+7.546 npm WARN config optional Use `--omit=optional` to exclude optional dependencies, or                                                                                                 
+7.553 npm WARN config `--include=optional` to include them.                                                                                                                               
+7.555 npm WARN config 
+7.559 npm WARN config     Default value does install optional deps unless otherwise omitted.
+59.85 npm WARN EBADENGINE Unsupported engine {
+59.85 npm WARN EBADENGINE   package: 'less@4.8.1',
+59.85 npm WARN EBADENGINE   required: { node: '>=18' },
+59.85 npm WARN EBADENGINE   current: { node: 'v16.20.2', npm: '8.19.4' }
+59.85 npm WARN EBADENGINE }
+59.86 npm WARN EBADENGINE Unsupported engine {
+59.86 npm WARN EBADENGINE   package: 'less-loader@13.0.0',
+59.86 npm WARN EBADENGINE   required: { node: '>= 22.11.0' },
+59.86 npm WARN EBADENGINE   current: { node: 'v16.20.2', npm: '8.19.4' }
+59.86 npm WARN EBADENGINE }
+59.86 npm WARN EBADENGINE Unsupported engine {
+59.86 npm WARN EBADENGINE   package: 'sass@1.102.0',
+59.86 npm WARN EBADENGINE   required: { node: '>=20.19.0' },
+59.86 npm WARN EBADENGINE   current: { node: 'v16.20.2', npm: '8.19.4' }
+59.86 npm WARN EBADENGINE }
+59.88 npm WARN EBADENGINE Unsupported engine {
+59.88 npm WARN EBADENGINE   package: 'node-releases@2.0.53',
+59.88 npm WARN EBADENGINE   required: { node: '>=18' },
+59.88 npm WARN EBADENGINE   current: { node: 'v16.20.2', npm: '8.19.4' }
+59.88 npm WARN EBADENGINE }
+59.89 npm WARN EBADENGINE Unsupported engine {
+59.89 npm WARN EBADENGINE   package: 'chokidar@5.0.0',
+59.89 npm WARN EBADENGINE   required: { node: '>= 20.19.0' },
+59.89 npm WARN EBADENGINE   current: { node: 'v16.20.2', npm: '8.19.4' }
+59.89 npm WARN EBADENGINE }
+59.89 npm WARN EBADENGINE Unsupported engine {
+59.89 npm WARN EBADENGINE   package: 'readdirp@5.1.1',
+59.89 npm WARN EBADENGINE   required: { node: '>= 20.19.0' },
+59.89 npm WARN EBADENGINE   current: { node: 'v16.20.2', npm: '8.19.4' }
+59.89 npm WARN EBADENGINE }
+92.79 npm WARN deprecated are-we-there-yet@1.1.7: This package is no longer supported.
+92.82 npm WARN deprecated osenv@0.1.5: This package is no longer supported.
+93.79 npm WARN deprecated npmlog@4.1.2: This package is no longer supported.
+97.23 npm WARN deprecated stable@0.1.8: Modern JS already guarantees Array#sort() is a stable sort, so this library is deprecated. See the compatibility table on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#browser_compatibility
+97.25 npm WARN deprecated urix@0.1.0: Please see https://github.com/lydell/urix#deprecated
+97.67 npm WARN deprecated q@1.5.1: You or someone you depend on is using Q, the JavaScript Promise library that gave JavaScript developers strong feelings about promises. They can almost certainly migrate to the native JavaScript promise now. Thank you literally everyone for joining me in this bet against the odds. Be excellent to each other.
+97.67 npm WARN deprecated 
+97.67 npm WARN deprecated (For a CapTP with native promises, see @endo/eventual-send and @endo/captp)
+98.24 npm WARN deprecated resolve-url@0.2.1: https://github.com/lydell/resolve-url#deprecated
+98.84 npm WARN deprecated source-map-url@0.4.1: See https://github.com/lydell/source-map-url#deprecated
+98.86 npm WARN deprecated source-map-resolve@0.5.3: See https://github.com/lydell/source-map-resolve#deprecated
+99.75 npm WARN deprecated gauge@2.7.4: This package is no longer supported.
+100.3 npm WARN deprecated har-validator@5.1.5: this library is no longer supported
+101.7 npm WARN deprecated fstream@1.0.12: This package is no longer supported.
+104.9 npm WARN deprecated fs-write-stream-atomic@1.0.10: This package is no longer supported.
+104.9 npm WARN deprecated copy-concurrently@1.0.5: This package is no longer supported.
+105.4 npm WARN deprecated uuid@3.4.0: Please upgrade  to version 7 or higher.  Older versions may use Math.random() in certain circumstances, which is known to be problematic.  See https://v8.dev/blog/math-random for details.
+108.2 npm WARN deprecated @types/minimatch@6.0.0: This is a stub types definition. minimatch provides its own type definitions, so you do not need this installed.
+109.1 npm WARN deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+110.9 npm WARN deprecated move-concurrently@1.0.1: This package is no longer supported.
+111.3 npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+111.9 npm WARN deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+111.9 npm WARN deprecated figgy-pudding@3.5.2: This module is no longer supported.
+114.4 npm WARN deprecated consolidate@0.15.1: Please upgrade to consolidate v1.0.0+ as it has been modernized with several long-awaited fixes implemented. Maintenance is supported by Forward Email at https://forwardemail.net ; follow/watch https://github.com/ladjs/consolidate for updates and release changelog
+114.4 npm WARN deprecated @hapi/topo@3.1.6: This version has been deprecated and is no longer supported or maintained
+114.4 npm WARN deprecated @hapi/bourne@1.3.2: This version has been deprecated and is no longer supported or maintained
+118.2 npm WARN deprecated @hapi/address@2.1.4: Moved to 'npm install @sideway/address'
+118.9 npm WARN deprecated html-webpack-plugin@3.2.0: 3.x is no longer supported
+121.0 npm WARN deprecated @babel/plugin-proposal-class-properties@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+124.5 npm WARN deprecated @hapi/hoek@8.5.1: This version has been deprecated and is no longer supported or maintained
+125.0 npm WARN deprecated webpack-chain@6.5.1: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+125.8 npm WARN deprecated request@2.88.2: request has been deprecated, see https://github.com/request/request/issues/3142
+127.1 npm WARN deprecated glob@7.1.7: Glob versions prior to v9 are no longer supported
+133.0 npm WARN deprecated @hapi/joi@15.1.1: Switch to 'npm install joi'
+133.2 npm WARN deprecated svgo@1.3.2: This SVGO version is no longer supported. Upgrade to v2.x.x.
+136.5 npm WARN deprecated tar@2.2.2: This version of tar is no longer supported, and will not receive security updates. Please upgrade asap.
+137.9 npm WARN deprecated popper.js@1.16.1: You can find the new Popper v2 at @popperjs/core, this package is dedicated to the legacy v1
+142.1 npm WARN deprecated bootstrap@4.6.2: This version of Bootstrap is no longer supported. Please upgrade to the latest version.
+142.8 npm WARN deprecated node-sass@4.14.1: Node Sass is no longer supported. Please use `sass` or `sass-embedded` instead.
+143.9 npm WARN deprecated vue@2.7.16: Vue 2 has reached EOL and is no longer actively maintained. See https://v2.vuejs.org/eol/ for more details.
+149.8 npm WARN deprecated core-js@2.6.12: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+575.1 npm notice 
+575.1 npm notice New major version of npm available! 8.19.4 -> 12.0.2
+575.1 npm notice Changelog: <https://github.com/npm/cli/releases/tag/v12.0.2>
+575.1 npm notice Run `npm install -g npm@12.0.2` to update!
+575.1 npm notice 
+575.1 npm ERR! code 1
+575.1 npm ERR! path /build/node_modules/node-sass
+575.1 npm ERR! command failed
+575.1 npm ERR! command sh -c -- node scripts/build.js
+575.1 npm ERR! Building: /usr/local/bin/node /build/node_modules/node-gyp/bin/node-gyp.js rebuild --verbose --libsass_ext= --libsass_cflags= --libsass_ldflags= --libsass_library=
+575.1 npm ERR! make: Entering directory '/build/node_modules/node-sass/build'
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/ast.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/ast.o ../src/libsass/src/ast.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/ast_fwd_decl.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/ast_fwd_decl.o ../src/libsass/src/ast_fwd_decl.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/backtrace.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/backtrace.o ../src/libsass/src/backtrace.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/base64vlq.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/base64vlq.o ../src/libsass/src/base64vlq.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/bind.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/bind.o ../src/libsass/src/bind.cpp
+575.1 npm ERR!   cc '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer  -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/cencode.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/cencode.o ../src/libsass/src/cencode.c
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/check_nesting.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/check_nesting.o ../src/libsass/src/check_nesting.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/color_maps.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/color_maps.o ../src/libsass/src/color_maps.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/constants.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/constants.o ../src/libsass/src/constants.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/context.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/context.o ../src/libsass/src/context.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/cssize.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/cssize.o ../src/libsass/src/cssize.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/emitter.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/emitter.o ../src/libsass/src/emitter.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/environment.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/environment.o ../src/libsass/src/environment.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/error_handling.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/error_handling.o ../src/libsass/src/error_handling.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/eval.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/eval.o ../src/libsass/src/eval.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/expand.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/expand.o ../src/libsass/src/expand.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/extend.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/extend.o ../src/libsass/src/extend.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/file.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/file.o ../src/libsass/src/file.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/functions.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/functions.o ../src/libsass/src/functions.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/inspect.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/inspect.o ../src/libsass/src/inspect.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/json.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/json.o ../src/libsass/src/json.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/lexer.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/lexer.o ../src/libsass/src/lexer.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/listize.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/listize.o ../src/libsass/src/listize.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/memory/SharedPtr.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/memory/SharedPtr.o ../src/libsass/src/memory/SharedPtr.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/node.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/node.o ../src/libsass/src/node.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/operators.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/operators.o ../src/libsass/src/operators.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/output.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/output.o ../src/libsass/src/output.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/parser.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/parser.o ../src/libsass/src/parser.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/plugins.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/plugins.o ../src/libsass/src/plugins.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/position.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/position.o ../src/libsass/src/position.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/prelexer.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/prelexer.o ../src/libsass/src/prelexer.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/remove_placeholders.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/remove_placeholders.o ../src/libsass/src/remove_placeholders.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/sass.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/sass.o ../src/libsass/src/sass.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/sass2scss.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/sass2scss.o ../src/libsass/src/sass2scss.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/sass_context.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/sass_context.o ../src/libsass/src/sass_context.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/sass_functions.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/sass_functions.o ../src/libsass/src/sass_functions.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/sass_util.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/sass_util.o ../src/libsass/src/sass_util.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/sass_values.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/sass_values.o ../src/libsass/src/sass_values.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/source_map.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/source_map.o ../src/libsass/src/source_map.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/subset_map.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/subset_map.o ../src/libsass/src/subset_map.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/to_c.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/to_c.o ../src/libsass/src/to_c.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/to_value.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/to_value.o ../src/libsass/src/to_value.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/units.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/units.o ../src/libsass/src/units.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/utf8_string.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/utf8_string.o ../src/libsass/src/utf8_string.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/util.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/util.o ../src/libsass/src/util.cpp
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=libsass' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DLIBSASS_VERSION="3.5.5"' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -std=gnu++14 -std=c++0x -fexceptions -frtti -MMD -MF ./Release/.deps/Release/obj.target/libsass/src/libsass/src/values.o.d.raw   -c -o Release/obj.target/libsass/src/libsass/src/values.o ../src/libsass/src/values.cpp
+575.1 npm ERR!   rm -f Release/obj.target/src/sass.a && ar crs Release/obj.target/src/sass.a Release/obj.target/libsass/src/libsass/src/ast.o Release/obj.target/libsass/src/libsass/src/ast_fwd_decl.o Release/obj.target/libsass/src/libsass/src/backtrace.o Release/obj.target/libsass/src/libsass/src/base64vlq.o Release/obj.target/libsass/src/libsass/src/bind.o Release/obj.target/libsass/src/libsass/src/cencode.o Release/obj.target/libsass/src/libsass/src/check_nesting.o Release/obj.target/libsass/src/libsass/src/color_maps.o Release/obj.target/libsass/src/libsass/src/constants.o Release/obj.target/libsass/src/libsass/src/context.o Release/obj.target/libsass/src/libsass/src/cssize.o Release/obj.target/libsass/src/libsass/src/emitter.o Release/obj.target/libsass/src/libsass/src/environment.o Release/obj.target/libsass/src/libsass/src/error_handling.o Release/obj.target/libsass/src/libsass/src/eval.o Release/obj.target/libsass/src/libsass/src/expand.o Release/obj.target/libsass/src/libsass/src/extend.o Release/obj.target/libsass/src/libsass/src/file.o Release/obj.target/libsass/src/libsass/src/functions.o Release/obj.target/libsass/src/libsass/src/inspect.o Release/obj.target/libsass/src/libsass/src/json.o Release/obj.target/libsass/src/libsass/src/lexer.o Release/obj.target/libsass/src/libsass/src/listize.o Release/obj.target/libsass/src/libsass/src/memory/SharedPtr.o Release/obj.target/libsass/src/libsass/src/node.o Release/obj.target/libsass/src/libsass/src/operators.o Release/obj.target/libsass/src/libsass/src/output.o Release/obj.target/libsass/src/libsass/src/parser.o Release/obj.target/libsass/src/libsass/src/plugins.o Release/obj.target/libsass/src/libsass/src/position.o Release/obj.target/libsass/src/libsass/src/prelexer.o Release/obj.target/libsass/src/libsass/src/remove_placeholders.o Release/obj.target/libsass/src/libsass/src/sass.o Release/obj.target/libsass/src/libsass/src/sass2scss.o Release/obj.target/libsass/src/libsass/src/sass_context.o Release/obj.target/libsass/src/libsass/src/sass_functions.o Release/obj.target/libsass/src/libsass/src/sass_util.o Release/obj.target/libsass/src/libsass/src/sass_values.o Release/obj.target/libsass/src/libsass/src/source_map.o Release/obj.target/libsass/src/libsass/src/subset_map.o Release/obj.target/libsass/src/libsass/src/to_c.o Release/obj.target/libsass/src/libsass/src/to_value.o Release/obj.target/libsass/src/libsass/src/units.o Release/obj.target/libsass/src/libsass/src/utf8_string.o Release/obj.target/libsass/src/libsass/src/util.o Release/obj.target/libsass/src/libsass/src/values.o
+575.1 npm ERR!   rm -rf "Release/sass.a" && cp -af "Release/obj.target/src/sass.a" "Release/sass.a"
+575.1 npm ERR!   g++ '-DNODE_GYP_MODULE_NAME=binding' '-DUSING_UV_SHARED=1' '-DUSING_V8_SHARED=1' '-DV8_DEPRECATION_WARNINGS=1' '-DV8_DEPRECATION_WARNINGS' '-DV8_IMMINENT_DEPRECATION_WARNINGS' '-D_GLIBCXX_USE_CXX11_ABI=1' '-D_LARGEFILE_SOURCE' '-D_FILE_OFFSET_BITS=64' '-D__STDC_FORMAT_MACROS' '-DOPENSSL_NO_PINSHARED' '-DOPENSSL_THREADS' '-DBUILDING_NODE_EXTENSION' -I/root/.node-gyp/16.20.2/include/node -I/root/.node-gyp/16.20.2/src -I/root/.node-gyp/16.20.2/deps/openssl/config -I/root/.node-gyp/16.20.2/deps/openssl/openssl/include -I/root/.node-gyp/16.20.2/deps/uv/include -I/root/.node-gyp/16.20.2/deps/zlib -I/root/.node-gyp/16.20.2/deps/v8/include -I../../nan -I../src/libsass/include  -fPIC -pthread -Wall -Wextra -Wno-unused-parameter -m64 -O3 -fno-omit-frame-pointer -fno-rtti -fno-exceptions -std=gnu++14 -std=c++0x -MMD -MF ./Release/.deps/Release/obj.target/binding/src/binding.o.d.raw   -c -o Release/obj.target/binding/src/binding.o ../src/binding.cpp
+575.1 npm ERR! make: Leaving directory '/build/node_modules/node-sass/build'
+575.1 npm ERR! gyp info it worked if it ends with ok
+575.1 npm ERR! gyp verb cli [
+575.1 npm ERR! gyp verb cli   '/usr/local/bin/node',
+575.1 npm ERR! gyp verb cli   '/build/node_modules/node-gyp/bin/node-gyp.js',
+575.1 npm ERR! gyp verb cli   'rebuild',
+575.1 npm ERR! gyp verb cli   '--verbose',
+575.1 npm ERR! gyp verb cli   '--libsass_ext=',
+575.1 npm ERR! gyp verb cli   '--libsass_cflags=',
+575.1 npm ERR! gyp verb cli   '--libsass_ldflags=',
+575.1 npm ERR! gyp verb cli   '--libsass_library='
+575.1 npm ERR! gyp verb cli ]
+575.1 npm ERR! gyp info using node-gyp@3.8.0
+575.1 npm ERR! gyp info using node@16.20.2 | linux | x64
+575.1 npm ERR! gyp verb command rebuild []
+575.1 npm ERR! gyp verb command clean []
+575.1 npm ERR! gyp verb clean removing "build" directory
+575.1 npm ERR! gyp verb command configure []
+575.1 npm ERR! gyp verb check python checking for Python executable "python2" in the PATH
+575.1 npm ERR! gyp verb `which` succeeded python2 /usr/bin/python2
+575.1 npm ERR! gyp verb check python version `/usr/bin/python2 -c "import sys; print "2.7.18
+575.1 npm ERR! gyp verb check python version .%s.%s" % sys.version_info[:3];"` returned: %j
+575.1 npm ERR! gyp verb get node dir no --target version specified, falling back to host node version: 16.20.2
+575.1 npm ERR! gyp verb command install [ '16.20.2' ]
+575.1 npm ERR! gyp verb install input version string "16.20.2"
+575.1 npm ERR! gyp verb install installing version: 16.20.2
+575.1 npm ERR! gyp verb install --ensure was passed, so won't reinstall if already installed
+575.1 npm ERR! gyp verb install version not already installed, continuing with install 16.20.2
+575.1 npm ERR! gyp verb ensuring nodedir is created /root/.node-gyp/16.20.2
+575.1 npm ERR! gyp verb created nodedir /root/.node-gyp
+575.1 npm ERR! gyp http GET https://nodejs.org/download/release/v16.20.2/node-v16.20.2-headers.tar.gz
+575.1 npm ERR! gyp http 200 https://nodejs.org/download/release/v16.20.2/node-v16.20.2-headers.tar.gz
+575.1 npm ERR! gyp verb extracted file from tarball include/node/common.gypi
+575.1 npm ERR! gyp verb extracted file from tarball include/node/config.gypi
+575.1 npm ERR! gyp verb extracted file from tarball include/node/node.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/node_api.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/js_native_api.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/js_native_api_types.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/node_api_types.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/node_buffer.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/node_object_wrap.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/node_version.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/v8-profiler.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/v8-version.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/v8-platform.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/v8.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/v8-internal.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/v8config.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/libplatform/libplatform-export.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/libplatform/libplatform.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/libplatform/v8-tracing.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/cppgc/common.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/aix.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/android-ifaddrs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/bsd.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/darwin.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/linux.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/os390.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/posix.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/stdint-msvc2008.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/sunos.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/threadpool.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/errno.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/tree.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/unix.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/version.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/uv/win.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1err.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/obj_mac.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ripemd.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/rsa.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/seed.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/evp.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ossl_typ.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/aes.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pem.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pemerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs7.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs7err.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/rand.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/rand_drbg.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/randerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/rc2.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/rc5.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/rsaerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ssl2.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ssl3.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/stack.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/store.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/tserr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ui.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509_vfy.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509err.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bnerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ssl.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cmac.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cms.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ecdsa.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ocsperr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/fipskey_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs12err.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/rc4.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/safestack.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/whrlpool.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/tls1.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dh.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/kdf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/kdferr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/md4.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/md5.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/mdc2.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/modes.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/objects.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pem2.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs12.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/storeerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/symhacks.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ts.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/txt_db.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/uierr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509v3.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/async.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/blowfish.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/camellia.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cast.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/comp.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/comperr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/conf_api.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/conferr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cryptoerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ct.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cterr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dsa.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dsaerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dtls1.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ebcdic.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ec.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ecdh.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/crypto.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1_mac.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1t.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ecerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/engine.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/engineerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/err.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/evperr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/hmac.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/lhash.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/md2.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/objectserr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ocsp.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509v3err.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/sslerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dherr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/sha.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/srp.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/srtp.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cmserr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asyncerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bio.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bioerr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bn.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/buffer.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/buffererr.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/opensslv.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/des.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/e_os2.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/idea.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/BSD-x86_64/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN32/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64-ARM/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64-ARM/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64-ARM/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64-ARM/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64-ARM/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/VC-WIN64A/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix-gcc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/aix64-gcc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin-i386-cc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-arm64-cc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/darwin64-x86_64-cc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-aarch64/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-armv4/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-elf/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-ppc64le/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x86_64/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux32-s390x/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-mips64/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-s390x/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris-x86-gcc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm_avx2/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm_avx2/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm_avx2/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/solaris64-x86_64-gcc/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x32/asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x32/asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x32/asm_avx2/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x32/asm_avx2/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x32/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux-x32/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-riscv64/no-asm/crypto/include/internal/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-riscv64/no-asm/crypto/include/internal/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-riscv64/no-asm/crypto/buildinf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-riscv64/no-asm/include/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/archs/linux64-riscv64/no-asm/include/progs.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/safestack_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509_vfy_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bn_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dso_conf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/opensslconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bio_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cmp_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cms_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/configuration_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ct_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ess_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/lhash_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/opensslv_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs7_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ui_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509v3_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/crypto_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/err_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/opensslconf_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs7_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ssl_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509_vfy_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1t_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1t_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bn_conf_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cmp_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/conf_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/crmf_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dso_conf_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/lhash_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ocsp_no-asm.h
+575.1 npm ERR! gyp verb content checksum node-v16.20.2-headers.tar.gz d6feed11c7f02601de746da81138f2d74fafbedff0b3ea9076974ca81ca62894
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs12_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/srp_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ui_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/conf_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/crmf_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ct_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/err_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ess_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ocsp_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/opensslv_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/safestack_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/srp_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/asn1_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bio_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/bn_conf_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/cms_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/configuration_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/crypto_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/dso_conf_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/fipskey_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/opensslconf_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/pkcs12_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/ssl_no-asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/openssl/x509v3_asm.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/zconf.h
+575.1 npm ERR! gyp verb extracted file from tarball include/node/zlib.h
+575.1 npm ERR! gyp verb tarball done parsing tarball
+575.1 npm ERR! gyp verb check download content checksum, need to download `SHASUMS256.txt`... 
+575.1 npm ERR! gyp verb checksum url https://nodejs.org/download/release/v16.20.2/SHASUMS256.txt
+575.1 npm ERR! gyp http GET https://nodejs.org/download/release/v16.20.2/SHASUMS256.txt
+575.1 npm ERR! gyp http 200 https://nodejs.org/download/release/v16.20.2/SHASUMS256.txt
+575.1 npm ERR! gyp verb checksum data {"node-v16.20.2-aix-ppc64.tar.gz":"e3866679e6fbb13f5156c328bb77623b4d63493c8aaa448686a2bc53007005b8","node-v16.20.2-darwin-arm64.tar.gz":"6a5c4108475871362d742b988566f3fe307f6a67ce14634eb3fbceb4f9eea88c","node-v16.20.2-darwin-arm64.tar.xz":"fb87e01f0b2c8545afb8dd0769f7eb2439fb4fc8731efa956744fb0e0bc98105","node-v16.20.2-darwin-x64.tar.gz":"d7a46eaf2b57ffddeda16ece0d887feb2e31a91ad33f8774da553da0249dc4a6","node-v16.20.2-darwin-x64.tar.xz":"107ae8d56a9c0aa85c8952231ac44d5e6df7c1ea3e9a36e2ef022ae36c98ccec","node-v16.20.2-headers.tar.gz":"d6feed11c7f02601de746da81138f2d74fafbedff0b3ea9076974ca81ca62894","node-v16.20.2-headers.tar.xz":"f46e93d3bb7981c7a19bbf3b7d377e0965d4a3fab3ba69cf77616e9da245b421","node-v16.20.2-linux-arm64.tar.gz":"b6945fcc9ad220386bb814bfae7137189fd17297f2959a744105e1bee006035a","node-v16.20.2-linux-arm64.tar.xz":"e88d86154d1ce53dc52fd74d79d4bfdf0b05f58c0bb2639adfa36e9378b770c4","node-v16.20.2-linux-armv7l.tar.gz":"88ea2ddef7db491d2e93c150d27fbec422a4d06d7a63bf34d46e6d20d30eed43","node-v16.20.2-linux-armv7l.tar.xz":"5f2a2a34d2f19931b8ef39416bde96933e6666f91a2d1a2b92af30627a8e8429","node-v16.20.2-linux-ppc64le.tar.gz":"731d9ecc82ff59449566bf73959b16cc368b1060212b51d03edf3ec5e9937ced","node-v16.20.2-linux-ppc64le.tar.xz":"17a85d996bd4810b45f66f121f923e707399def25c7a87c4be9eec661d368b59","node-v16.20.2-linux-s390x.tar.gz":"49c7aa3e26a5569f5b399dfd6e86566fddefc9a62c40cc1d7a42daa7f4268b06","node-v16.20.2-linux-s390x.tar.xz":"dcccafa1559e2096b13ca0fb7c4df76512121b9f2414c7585c136d2b3c815a74","node-v16.20.2-linux-x64.tar.gz":"c9193e6c414891694759febe846f4f023bf48410a6924a8b1520c46565859665","node-v16.20.2-linux-x64.tar.xz":"874463523f26ed528634580247f403d200ba17a31adf2de98a7b124c6eb33d87","node-v16.20.2.pkg":"697ee21f4693625cc9d060d25f2c29d12dffcb38d49e28dd446c6cb84eacfdf1","node-v16.20.2.tar.gz":"33188eb11b977113adb65b2e09d71bddd63f12168ba73ceadae6c27938dc9e93","node-v16.20.2.tar.xz":"576f1a03c455e491a8d132b587eb6b3b84651fc8974bb3638433dd44d22c8f49","node-v16.20.2-win-x64.7z":"ebb0c50b1e4943cfeb005e71f5b9c6733f0a9586df3138df199d855d6abac77c","node-v16.20.2-win-x64.zip":"f8bb35f6c08dc7bf14ac753509c06ed1a7ebf5b390cd3fbdc8f8c1aedd020ec3","node-v16.20.2-win-x86.7z":"b0b2ef51565a01e34e4743ab5b26d76d34bb5403479c8b591f5ae434e0ab4adc","node-v16.20.2-win-x86.zip":"c9c0b774328374973d5af5d72c4c6ce3932a1988c7efd32d84c35ba4771df41a","node-v16.20.2-x64.msi":"8f78f8cea29743f9bfd4544b9c01106929e62e5211f019dd1f0a4b02916683d2","node-v16.20.2-x86.msi":"5cdabf8c2d117da96f5238930df6e06d18d30f2b21c1dd91f84fb1098422b74a","win-x64/node.exe":"9f498591fd05b3aca332ce4ad966e77cd6e5c150751079ce8bad8ee499945b79","win-x64/node.lib":"e2c00776781232ec8d756a00d086da89f527775a02267f6f604a4320893463c7","win-x64/node_pdb.7z":"c61115bda7099df52d5fc44ad0cfb71c3e23813e4b4379adc72cdf5b467cdd72","win-x64/node_pdb.zip":"ac79e3a3bf490b0e32cdefa201abad0633a737c4f1741de4469631cd4335e177","win-x86/node.exe":"b6334209a452cc547fb9cadc28d26ef9e48f0015fcd8514724a6938aff3e0460","win-x86/node.lib":"5890587b08eacbdab20239bf8ff350392794d9beb193096e941596b06ceeafbf","win-x86/node_pdb.7z":"f3f0cdbbf416b3a1606f6670ecec16b33c763acd91ed1da841355a92bc554b15","win-x86/node_pdb.zip":"7f6371282bea7b08863236cfea69c5f3ffaf6be6309e4872e5510d5fcd062693"}
+575.2 npm ERR! gyp verb download contents checksum {"node-v16.20.2-headers.tar.gz":"d6feed11c7f02601de746da81138f2d74fafbedff0b3ea9076974ca81ca62894"}
+575.2 npm ERR! gyp verb validating download checksum for node-v16.20.2-headers.tar.gz (d6feed11c7f02601de746da81138f2d74fafbedff0b3ea9076974ca81ca62894 == d6feed11c7f02601de746da81138f2d74fafbedff0b3ea9076974ca81ca62894)
+575.2 npm ERR! gyp verb get node dir target node version installed: 16.20.2
+575.2 npm ERR! gyp verb build dir attempting to create "build" dir: /build/node_modules/node-sass/build
+575.2 npm ERR! gyp verb build dir "build" dir needed to be created? /build/node_modules/node-sass/build
+575.2 npm ERR! gyp verb build/config.gypi creating config file
+575.2 npm ERR! gyp verb build/config.gypi writing out config file: /build/node_modules/node-sass/build/config.gypi
+575.2 npm ERR! (node:97) [DEP0150] DeprecationWarning: Setting process.config is deprecated. In the future the property will be read-only.
+575.2 npm ERR! (Use `node --trace-deprecation ...` to show where the warning was created)
+575.2 npm ERR! gyp verb config.gypi checking for gypi file: /build/node_modules/node-sass/config.gypi
+575.2 npm ERR! gyp verb common.gypi checking for gypi file: /build/node_modules/node-sass/common.gypi
+575.2 npm ERR! gyp verb gyp gyp format was not specified; forcing "make"
+575.2 npm ERR! gyp info spawn /usr/bin/python2
+575.2 npm ERR! gyp info spawn args [
+575.2 npm ERR! gyp info spawn args   '/build/node_modules/node-gyp/gyp/gyp_main.py',
+575.2 npm ERR! gyp info spawn args   'binding.gyp',
+575.2 npm ERR! gyp info spawn args   '-f',
+575.2 npm ERR! gyp info spawn args   'make',
+575.2 npm ERR! gyp info spawn args   '-I',
+575.2 npm ERR! gyp info spawn args   '/build/node_modules/node-sass/build/config.gypi',
+575.2 npm ERR! gyp info spawn args   '-I',
+575.2 npm ERR! gyp info spawn args   '/build/node_modules/node-gyp/addon.gypi',
+575.2 npm ERR! gyp info spawn args   '-I',
+575.2 npm ERR! gyp info spawn args   '/root/.node-gyp/16.20.2/include/node/common.gypi',
+575.2 npm ERR! gyp info spawn args   '-Dlibrary=shared_library',
+575.2 npm ERR! gyp info spawn args   '-Dvisibility=default',
+575.2 npm ERR! gyp info spawn args   '-Dnode_root_dir=/root/.node-gyp/16.20.2',
+575.2 npm ERR! gyp info spawn args   '-Dnode_gyp_dir=/build/node_modules/node-gyp',
+575.2 npm ERR! gyp info spawn args   '-Dnode_lib_file=/root/.node-gyp/16.20.2/<(target_arch)/node.lib',
+575.2 npm ERR! gyp info spawn args   '-Dmodule_root_dir=/build/node_modules/node-sass',
+575.2 npm ERR! gyp info spawn args   '-Dnode_engine=v8',
+575.2 npm ERR! gyp info spawn args   '--depth=.',
+575.2 npm ERR! gyp info spawn args   '--no-parallel',
+575.2 npm ERR! gyp info spawn args   '--generator-output',
+575.2 npm ERR! gyp info spawn args   'build',
+575.2 npm ERR! gyp info spawn args   '-Goutput_dir=.'
+575.2 npm ERR! gyp info spawn args ]
+575.2 npm ERR! gyp verb command build []
+575.2 npm ERR! gyp verb build type Release
+575.2 npm ERR! gyp verb architecture x64
+575.2 npm ERR! gyp verb node dev dir /root/.node-gyp/16.20.2
+575.2 npm ERR! gyp verb `which` succeeded for `make` /usr/bin/make
+575.2 npm ERR! gyp info spawn make
+575.2 npm ERR! gyp info spawn args [ 'V=1', 'BUILDTYPE=Release', '-C', 'build' ]
+575.2 npm ERR! ../src/libsass/src/cencode.c: In function 'base64_encode_block':
+575.2 npm ERR! ../src/libsass/src/cencode.c:48:11: warning: this statement may fall through [-Wimplicit-fallthrough=]
+575.2 npm ERR!    48 |    result = (fragment & 0x003) << 4;
+575.2 npm ERR!       |    ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+575.2 npm ERR! ../src/libsass/src/cencode.c:52:2: note: here
+575.2 npm ERR!    52 |  case step_B:
+575.2 npm ERR!       |  ^~~~
+575.2 npm ERR! ../src/libsass/src/cencode.c:62:11: warning: this statement may fall through [-Wimplicit-fallthrough=]
+575.2 npm ERR!    62 |    result = (fragment & 0x00f) << 2;
+575.2 npm ERR!       |    ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+575.2 npm ERR! ../src/libsass/src/cencode.c:66:2: note: here
+575.2 npm ERR!    66 |  case step_C:
+575.2 npm ERR!       |  ^~~~
+575.2 npm ERR! ../src/libsass/src/functions.cpp: In function 'void Sass::Functions::handle_utf8_error(const Sass::ParserState&, Sass::Backtraces)':
+575.2 npm ERR! ../src/libsass/src/functions.cpp:110:20: warning: catching polymorphic type 'class utf8::invalid_code_point' by value [-Wcatch-value=]
+575.2 npm ERR!   110 |       catch (utf8::invalid_code_point) {
+575.2 npm ERR!       |                    ^~~~~~~~~~~~~~~~~~
+575.2 npm ERR! ../src/libsass/src/functions.cpp:114:20: warning: catching polymorphic type 'class utf8::not_enough_room' by value [-Wcatch-value=]
+575.2 npm ERR!   114 |       catch (utf8::not_enough_room) {
+575.2 npm ERR!       |                    ^~~~~~~~~~~~~~~
+575.2 npm ERR! ../src/libsass/src/functions.cpp:118:20: warning: catching polymorphic type 'class utf8::invalid_utf8' by value [-Wcatch-value=]
+575.2 npm ERR!   118 |       catch (utf8::invalid_utf8) {
+575.2 npm ERR!       |                    ^~~~~~~~~~~~
+575.2 npm ERR! ../src/libsass/src/json.cpp: In function 'char* json_encode_string(const char*)':
+575.2 npm ERR! ../src/libsass/src/json.cpp:405:15: warning: catching polymorphic type 'class std::exception' by value [-Wcatch-value=]
+575.2 npm ERR!   405 |   catch (std::exception) {
+575.2 npm ERR!       |               ^~~~~~~~~
+575.2 npm ERR! ../src/libsass/src/json.cpp: In function 'char* json_stringify(const JsonNode*, const char*)':
+575.2 npm ERR! ../src/libsass/src/json.cpp:424:15: warning: catching polymorphic type 'class std::exception' by value [-Wcatch-value=]
+575.2 npm ERR!   424 |   catch (std::exception) {
+575.2 npm ERR!       |               ^~~~~~~~~
+575.2 npm ERR! In file included from /root/.node-gyp/16.20.2/include/node/v8.h:30,
+575.2 npm ERR!                  from /root/.node-gyp/16.20.2/include/node/node.h:73,
+575.2 npm ERR!                  from ../../nan/nan.h:67,
+575.2 npm ERR!                  from ../src/binding.cpp:1:
+575.2 npm ERR! /root/.node-gyp/16.20.2/include/node/v8-internal.h: In function 'void v8::internal::PerformCastCheck(T*)':
+575.2 npm ERR! /root/.node-gyp/16.20.2/include/node/v8-internal.h:492:38: error: 'remove_cv_t' is not a member of 'std'; did you mean 'remove_cv'?
+575.2 npm ERR!   492 |             !std::is_same<Data, std::remove_cv_t<T>>::value>::Perform(data);
+575.2 npm ERR!       |                                      ^~~~~~~~~~~
+575.2 npm ERR!       |                                      remove_cv
+575.2 npm ERR! /root/.node-gyp/16.20.2/include/node/v8-internal.h:492:38: error: 'remove_cv_t' is not a member of 'std'; did you mean 'remove_cv'?
+575.2 npm ERR!   492 |             !std::is_same<Data, std::remove_cv_t<T>>::value>::Perform(data);
+575.2 npm ERR!       |                                      ^~~~~~~~~~~
+575.2 npm ERR!       |                                      remove_cv
+575.2 npm ERR! /root/.node-gyp/16.20.2/include/node/v8-internal.h:492:50: error: template argument 2 is invalid
+575.2 npm ERR!   492 |             !std::is_same<Data, std::remove_cv_t<T>>::value>::Perform(data);
+575.2 npm ERR!       |                                                  ^
+575.2 npm ERR! /root/.node-gyp/16.20.2/include/node/v8-internal.h:492:63: error: '::Perform' has not been declared
+575.2 npm ERR!   492 |             !std::is_same<Data, std::remove_cv_t<T>>::value>::Perform(data);
+575.2 npm ERR!       |                                                               ^~~~~~~
+575.2 npm ERR! ../src/binding.cpp: In function 'Nan::NAN_METHOD_RETURN_TYPE render(Nan::NAN_METHOD_ARGS_TYPE)':
+575.2 npm ERR! ../src/binding.cpp:284:80: warning: cast between incompatible function types from 'void (*)(uv_work_t*)' {aka 'void (*)(uv_work_s*)'} to 'uv_after_work_cb' {aka 'void (*)(uv_work_s*, int)'} [-Wcast-function-type]
+575.2 npm ERR!   284 |     int status = uv_queue_work(uv_default_loop(), &ctx_w->request, compile_it, (uv_after_work_cb)MakeCallback);
+575.2 npm ERR!       |                                                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+575.2 npm ERR! ../src/binding.cpp: In function 'Nan::NAN_METHOD_RETURN_TYPE render_file(Nan::NAN_METHOD_ARGS_TYPE)':
+575.2 npm ERR! ../src/binding.cpp:320:80: warning: cast between incompatible function types from 'void (*)(uv_work_t*)' {aka 'void (*)(uv_work_s*)'} to 'uv_after_work_cb' {aka 'void (*)(uv_work_s*, int)'} [-Wcast-function-type]
+575.2 npm ERR!   320 |     int status = uv_queue_work(uv_default_loop(), &ctx_w->request, compile_it, (uv_after_work_cb)MakeCallback);
+575.2 npm ERR!       |                                                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+575.2 npm ERR! In file included from ../../nan/nan.h:67,
+575.2 npm ERR!                  from ../src/binding.cpp:1:
+575.2 npm ERR! ../src/binding.cpp: At global scope:
+575.2 npm ERR! /root/.node-gyp/16.20.2/include/node/node.h:887:7: warning: cast between incompatible function types from 'void (*)(Nan::ADDON_REGISTER_FUNCTION_ARGS_TYPE)' {aka 'void (*)(v8::Local<v8::Object>)'} to 'node::addon_register_func' {aka 'void (*)(v8::Local<v8::Object>, v8::Local<v8::Value>, void*)'} [-Wcast-function-type]
+575.2 npm ERR!   887 |       (node::addon_register_func) (regfunc),                          \
+575.2 npm ERR!       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+575.2 npm ERR! /root/.node-gyp/16.20.2/include/node/node.h:921:3: note: in expansion of macro 'NODE_MODULE_X'
+575.2 npm ERR!   921 |   NODE_MODULE_X(modname, regfunc, NULL, 0)  // NOLINT (readability/null_usage)
+575.2 npm ERR!       |   ^~~~~~~~~~~~~
+575.2 npm ERR! ../src/binding.cpp:358:1: note: in expansion of macro 'NODE_MODULE'
+575.2 npm ERR!   358 | NODE_MODULE(binding, RegisterModule);
+575.2 npm ERR!       | ^~~~~~~~~~~
+575.2 npm ERR! make: *** [binding.target.mk:133: Release/obj.target/binding/src/binding.o] Error 1
+575.2 npm ERR! gyp ERR! build error 
+575.2 npm ERR! gyp ERR! stack Error: `make` failed with exit code: 2
+575.2 npm ERR! gyp ERR! stack     at ChildProcess.onExit (/build/node_modules/node-gyp/lib/build.js:262:23)
+575.2 npm ERR! gyp ERR! stack     at ChildProcess.emit (node:events:513:28)
+575.2 npm ERR! gyp ERR! stack     at Process.ChildProcess._handle.onexit (node:internal/child_process:293:12)
+575.2 npm ERR! gyp ERR! System Linux 4.19.12-1.el7.elrepo.x86_64
+575.2 npm ERR! gyp ERR! command "/usr/local/bin/node" "/build/node_modules/node-gyp/bin/node-gyp.js" "rebuild" "--verbose" "--libsass_ext=" "--libsass_cflags=" "--libsass_ldflags=" "--libsass_library="
+575.2 npm ERR! gyp ERR! cwd /build/node_modules/node-sass
+575.2 npm ERR! gyp ERR! node -v v16.20.2
+575.2 npm ERR! gyp ERR! node-gyp -v v3.8.0
+575.2 npm ERR! gyp ERR! not ok 
+575.2 npm ERR! Build failed with error code: 1
+575.2 
+575.2 npm ERR! A complete log of this run can be found in:
+575.2 npm ERR!     /root/.npm/_logs/2026-08-10T17_51_56_809Z-debug-0.log
+------
+
+
+
+
+
+
+
+
